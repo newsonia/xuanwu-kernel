@@ -1,27 +1,87 @@
 org 0x7C00
 bits 16
 
-;初始化段
-mov ax,0
-mov ds,ax
-mov es,ax
-mov ss,ax
-mov sp,0x7C00
+; 初始化段寄存器
+xor ax, ax
+mov ds, ax
+mov es, ax
+mov ss, ax
+mov sp, 0x7C00
 
-;INT13读软盘：第2扇区→内存0x1000:0000
-mov ah,0x02    ;读磁盘
-mov al,1       ;读1个扇区
-mov ch,0       ;柱面0
-mov cl,2       ;起始扇区2（内核位置）
-mov dh,0       ;磁头0
-mov dl,0       ;A盘软盘
-mov bx,0x1000
-mov es,bx
-xor bx,bx
+; 清屏
+mov ax, 0x03
+int 0x10
+
+; 读内核到 0x1000:0000（2个扇区足够）
+mov ah, 0x02
+mov al, 2
+mov ch, 0
+mov cl, 2
+mov dh, 0
+mov dl, 0
+mov bx, 0x1000
+mov es, bx
+xor bx, bx
 int 0x13
 
-jmp 0x1000:0000 ;跳内核
+; 关中断
+cli
 
-;补齐512字节+引导魔数
-times 510-($-$$) db 0
+; 开启A20地址线（VMware必须）
+in al, 0x92
+or al, 2
+out 0x92, al
+
+; 加载GDT
+lgdt [gdt_ptr]
+
+; 开启保护模式
+mov eax, cr0
+or al, 1
+mov cr0, eax
+
+; 远跳转刷新流水线
+jmp dword 0x08:pm_entry
+
+; GDT定义
+gdt_start:
+dd 0
+dd 0
+
+gdt_code:
+dw 0xFFFF
+dw 0
+db 0
+db 10011010b
+db 11001111b
+db 0
+
+gdt_data:
+dw 0xFFFF
+dw 0
+db 0
+db 10010010b
+db 11001111b
+db 0
+
+gdt_end:
+
+gdt_ptr:
+dw gdt_end - gdt_start - 1
+dd gdt_start
+
+; 32位代码
+bits 32
+pm_entry:
+mov ax, 0x10
+mov ds, ax
+mov es, ax
+mov ss, ax
+mov esp, 0x20000 ; 安全栈地址
+
+; 跳转到内核入口
+jmp 0x10000
+
+; 引导扇区签名
+times 510 - ($ - $$) db 0
 dw 0xAA55
