@@ -1,36 +1,26 @@
-org 0x1000
+org 0x0000
 bits 16
 
-; VGA 显存起始段 0xB800
+; 段设置（关键！）
+mov ax, 0x1000
+mov ds, ax           ; 数据段 = 内核所在段
 mov ax, 0xB800
-mov es, ax
+mov es, ax           ; 显存段
 
-; 输出 Pangu Kernel
-mov byte [es:0],  'P'
-mov byte [es:1],  0x07
-mov byte [es:2],  'a'
-mov byte [es:3],  0x07
-mov byte [es:4],  'n'
-mov byte [es:5],  0x07
-mov byte [es:6],  'g'
-mov byte [es:7],  0x07
-mov byte [es:8],  'u'
-mov byte [es:9],  0x07
+mov si, msg
+mov di, 0
 
-mov byte [es:10], ' '
-mov byte [es:11], 0x07
+print:
+    lodsb            ; 读字符 al = [si++]
+    test al, al
+    je end
 
-mov byte [es:12], 'K'
-mov byte [es:13], 0x07
-mov byte [es:14], 'e'
-mov byte [es:15], 0x07
-mov byte [es:16], 'r'
-mov byte [es:17], 0x07
-mov byte [es:18], 'n'
-mov byte [es:19], 0x07
-mov byte [es:20], 'e'
-mov byte [es:21], 0x07
-mov byte [es:22], 'l'
-mov byte [es:23], 0x07
+    mov [es:di], al
+    mov byte [es:di+1], 0x0A   ; 绿色
+    add di, 2
+    jmp print
 
-jmp $ ; 死循环，内核停在这里
+end:
+    jmp $
+
+msg db 'Hello Pangu Kernel!', 0
