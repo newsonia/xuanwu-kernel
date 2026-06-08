@@ -1,46 +1,49 @@
 org 0x0000
 bits 16
 
-; 段设置（关键！你原来的代码，完全不动）
-mov ax, 0x1000
-mov ds, ax           ; 数据段 = 内核所在段
-mov ax, 0xB800
-mov es, ax           ; 显存段
+; ==============================
+; Pangu Kernel 0.1 (冻结版)
+; 功能：打印 + 键盘输入
+; ==============================
 
-;--------------------------
-; 0.02 原有代码：打印字符串
-;--------------------------
+mov ax, 0x1000
+mov ds, ax
+mov ax, 0xB800
+mov es, ax
+
+; 打印欢迎信息
 mov si, msg
 mov di, 0
 
 print:
-    lodsb            ; 读字符 al = [si++]
+    lodsb
     test al, al
-    je kernel_main    ; 改：打印完进入内核主逻辑
+    je kernel_ready
 
     mov [es:di], al
-    mov byte [es:di+1], 0x0A   ; 绿色
+    mov byte [es:di+1], 0x0A
     add di, 2
     jmp print
 
-;--------------------------
-; 0.03 新增：内核主循环 + 键盘输入
-; 功能：按任意键，在屏幕上显示字符
-;--------------------------
-kernel_main:
-    ; 读取键盘（BIOS 中断 16h 00h：等待按键）
+; ==============================
+; 内核公共函数
+; ==============================
+
+; 读取键盘
+kernel_read_key:
     mov ah, 0x00
-    int 0x16         ; 按键后，AL = 字符码
+    int 0x16
+    ret
 
-    ; 把读到的字符显示在屏幕上
+; 打印字符
+kernel_print_char:
     mov [es:di], al
-    mov byte [es:di+1], 0x0E   ; 黄色字符
-    add di, 2         ; 光标后移
+    mov byte [es:di+1], 0x0E
+    add di, 2
+    ret
 
-    ; 循环继续接收下一个按键
-    jmp kernel_main
+; 跳转到分支
+kernel_ready:
+    jmp branch_entry
 
-;--------------------------
-; 数据（完全保留）
-;--------------------------
-msg db 'Hello Pangu Kernel!', 0
+msg db 'Pangu Kernel 0.1', 0
