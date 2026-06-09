@@ -1,46 +1,74 @@
 org 0x0000
 bits 16
 
-; 段设置（关键！你原来的代码，完全不动）
+; 段设置
 mov ax, 0x1000
-mov ds, ax           ; 数据段 = 内核所在段
+mov ds, ax
 mov ax, 0xB800
-mov es, ax           ; 显存段
+mov es, ax
 
-;--------------------------
-; 0.02 原有代码：打印字符串
-;--------------------------
+; 开机清屏
+call clear_screen
+
+; 打印欢迎信息
 mov si, msg
 mov di, 0
 
 print:
-    lodsb            ; 读字符 al = [si++]
+    lodsb
     test al, al
-    je kernel_main    ; 改：打印完进入内核主逻辑
+    je kernel_main
 
     mov [es:di], al
-    mov byte [es:di+1], 0x0A   ; 绿色
+    mov byte [es:di+1], 0x0A
     add di, 2
     jmp print
 
-;--------------------------
-; 0.03 新增：内核主循环 + 键盘输入
-; 功能：按任意键，在屏幕上显示字符
-;--------------------------
+;==============================
+; 内核主循环：键盘处理
+;==============================
 kernel_main:
-    ; 读取键盘（BIOS 中断 16h 00h：等待按键）
+    ; 等待按键
     mov ah, 0x00
-    int 0x16         ; 按键后，AL = 字符码
+    int 0x16
 
-    ; 把读到的字符显示在屏幕上
+    ; ==============================
+    ; 核心：按 c 键 = 清屏
+    ; ==============================
+    cmp al, 'c'          ; 判断是否按了 c
+    je  do_clear_screen  ; 是 → 清屏
+
+    ; 普通按键：显示字符
     mov [es:di], al
-    mov byte [es:di+1], 0x0E   ; 黄色字符
-    add di, 2         ; 光标后移
+    mov byte [es:di+1], 0x0E
+    add di, 2
 
-    ; 循环继续接收下一个按键
     jmp kernel_main
 
-;--------------------------
-; 数据（完全保留）
-;--------------------------
+;==============================
+; 清屏处理
+;==============================
+do_clear_screen:
+    call clear_screen   ; 执行清屏
+    mov di, 0           ; 光标回到左上角
+    jmp kernel_main
+
+;==============================
+; 清屏函数
+;==============================
+clear_screen:
+    push di
+    mov di, 0
+clear_loop:
+    mov byte [es:di], 0        ; 空字符
+    mov byte [es:di+1], 0x00   ; 黑色
+    add di, 2
+    cmp di, 80*25*2
+    jb clear_loop
+    pop di
+    ret
+
+;==============================
+; 数据
+;==============================
 msg db 'Hello Pangu Kernel!', 0
