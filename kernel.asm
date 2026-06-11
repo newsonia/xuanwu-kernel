@@ -2,13 +2,11 @@ org 0x0000
 bits 16
 
 ; ==============================
-; Pangu Kernel 0.0.7
+; Pangu Kernel 0.0.8
 ; Features:
-; 1. Add getkey function for keyboard input
-; 2. Encapsulated putc and print_str for output
-; 3. Press Enter: new line
-; 4. Press Backspace: delete character
-; 5. Press 'c' to clear screen
+; 1. Add auto terminal prompt "$ "
+; 2. Keep all functions from 0.0.7
+; 3. Prompt shows after new line and clear screen
 ; ==============================
 
 ; 段设置
@@ -22,6 +20,9 @@ call clear_screen       ; 开机清屏
 mov di, 0
 mov si, msg_kernel
 call print_str
+
+; 首次换行并显示提示符
+call enter_line
 
 ; 光标行列变量
 row db 0
@@ -50,7 +51,7 @@ kernel_main:
     jmp kernel_main
 
 ;--------------------------
-; 换行处理
+; 换行处理 + 自动输出提示符
 ;--------------------------
 enter_line:
     mov byte [col], 0
@@ -59,6 +60,10 @@ enter_line:
     mov bl, 160
     mul bl
     mov di, ax
+
+    ; 打印终端提示符
+    mov si, prompt
+    call print_str
     jmp kernel_main
 
 ;--------------------------
@@ -81,6 +86,9 @@ do_clear:
     mov di, 0
     mov byte [row], 0
     mov byte [col], 0
+    ; 清屏后重新显示提示符
+    mov si, prompt
+    call print_str
     jmp kernel_main
 
 ;--------------------------
@@ -134,4 +142,5 @@ clear_loop:
 ;--------------------------
 ; 字符串数据
 ;--------------------------
-msg_kernel db 'Pangu Kernel 0.0.7', 0
+msg_kernel db 'Pangu Kernel 0.0.8', 0
+prompt     db '$ ', 0   ; 终端提示符
