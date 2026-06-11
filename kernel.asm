@@ -2,11 +2,12 @@ org 0x0000
 bits 16
 
 ; ==============================
-; Pangu Kernel 0.0.9
+; Pangu Kernel 0.0.10
 ; Features:
-; 1. Prevent backspace from deleting prompt "$ "
-; 2. Keep all functions from 0.0.8
-; 3. Terminal prompt works normally
+; 1. Different color for system text and user input
+; 2. Auto terminal prompt "$ "
+; 3. Protect prompt from backspace
+; 4. Press 'c' to clear screen
 ; ==============================
 
 ; 段设置
@@ -66,11 +67,10 @@ enter_line:
     jmp kernel_main
 
 ;--------------------------
-; 退格优化：禁止删除提示符
-; 提示符占2个字符位置，col < 2 就不能退格
+; 退格：保护提示符区域
 ;--------------------------
 backspace:
-    cmp byte [col], 2    ; 光标在前2位（提示符区域），直接返回
+    cmp byte [col], 2
     jle kernel_main
 
     dec byte [col]
@@ -100,7 +100,7 @@ getkey:
     ret
 
 ;--------------------------
-; 单字符输出
+; 单字符输出（用户输入：黄色 0x0E）
 ;--------------------------
 putc:
     mov [es:di], al
@@ -110,19 +110,22 @@ putc:
     ret
 
 ;--------------------------
-; 字符串输出
+; 字符串输出（系统文本：绿色 0x0A）
 ;--------------------------
 print_str:
     lodsb
     test al, al
     je  .end
-    call putc
+    mov [es:di], al
+    mov byte [es:di+1], 0x0A
+    add di, 2
+    inc byte [col]
     jmp print_str
 .end:
     ret
 
 ;--------------------------
-; 清屏
+; 清屏函数
 ;--------------------------
 clear_screen:
     push di
@@ -139,5 +142,5 @@ clear_loop:
 ;--------------------------
 ; 字符串数据
 ;--------------------------
-msg_kernel db 'Pangu Kernel 0.0.9', 0
+msg_kernel db 'Pangu Kernel 0.0.10', 0
 prompt     db '$ ', 0
