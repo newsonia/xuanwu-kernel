@@ -2,12 +2,13 @@ org 0x0000
 bits 16
 
 ; ==============================
-; Pangu Kernel 0.0.10
+; Pangu Kernel 0.0.11
 ; Features:
-; 1. Different color for system text and user input
-; 2. Auto terminal prompt "$ "
-; 3. Protect prompt from backspace
-; 4. Press 'c' to clear screen
+; 1. Add double protection for line length (max 80 chars per line)
+; 2. Green for system text, yellow for user input
+; 3. Auto prompt "$ " after new line and clear screen
+; 4. Prevent backspace from deleting prompt
+; 5. Press 'c' to clear screen
 ; ==============================
 
 ; 段设置
@@ -100,9 +101,15 @@ getkey:
     ret
 
 ;--------------------------
-; 单字符输出（用户输入：黄色 0x0E）
+; 单字符输出（用户输入 黄色）
+; 新增：行长度二次校验
 ;--------------------------
 putc:
+    ; 二次判断，防止超出80列
+    mov bl, [col]
+    cmp bl, 79
+    je  enter_line
+
     mov [es:di], al
     mov byte [es:di+1], 0x0E
     add di, 2
@@ -110,7 +117,7 @@ putc:
     ret
 
 ;--------------------------
-; 字符串输出（系统文本：绿色 0x0A）
+; 字符串输出（系统文本 绿色）
 ;--------------------------
 print_str:
     lodsb
@@ -142,5 +149,5 @@ clear_loop:
 ;--------------------------
 ; 字符串数据
 ;--------------------------
-msg_kernel db 'Pangu Kernel 0.0.10', 0
+msg_kernel db 'Pangu Kernel 0.0.11', 0
 prompt     db '$ ', 0
