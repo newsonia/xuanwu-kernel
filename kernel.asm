@@ -2,56 +2,64 @@ org 0x0000
 bits 16
 
 ; ==============================
-; XuanWu Kernel 0.0.13
-; Fixed: Data all placed at file end, no execution flow overflow
+; XuanWu Kernel 0.0.14
+; Update Log:
+; 1. Replace Ctrl+C with Esc for clear screen
+; 2. Add boot delay & blinking movable cursor
+; 3. Rename from Pangu Kernel
+; 4. Fix bug: ESC clear screen reprint kernel title
+; 5. Move all data to file end, add jmp $ to block execution overflow
+; 6. Optimize VGA write to eliminate character residual shadow
+; Original Features:
+; 1. Normal 'c' key input
+; 2. 80-column auto line wrap protection
+; 3. Two-color text: system green / user input yellow
+; 4. Backspace cannot delete prompt "$ "
 ; ==============================
 
-; 段设置（匹配boot加载地址 0x1000:0000）
+; 段寄存器配置（boot将内核加载至 0x1000:0000）
 mov ax, 0x1000
 mov ds, ax
 mov ax, 0xB800
 mov es, ax
 
-; 开机延时 约1秒
+; 开机1秒延时
 mov cx, 0x000F
 mov dx, 0x4240
 mov ah, 0x86
 int 0x15
 
-; 设置下划线闪烁光标
+; 光标：下划线闪烁样式
 mov ah, 0x01
 mov ch, 0x06
 mov cl, 0x07
 int 0x10
 
-call clear_screen       ; 开机清屏
+call clear_screen
 
+; 打印内核标题
 mov di, 0
 mov si, msg_kernel
 call print_str
 
-; 首次换行并显示提示符
+; 生成首行提示符
 call enter_line
 
-; 同步初始光标位置
+; 同步硬件光标
 call set_cursor
 
-;--------------------------
-; 主循环
-;--------------------------
+;==================== 主输入循环 ====================
 kernel_main:
-    call getkey        ; 读取按键
+    call getkey
 
-    ; ESC 清屏 al=0x1B
-    cmp al, 0x1B
+    cmp al, 0x1B    ; ESC 全局清屏
     je  do_clear
-
-    cmp al, 0x0D
+    cmp al, 0x0D    ; 回车换行
     je  enter_line
-
-    cmp al, 0x08
+    cmp al, 0x08    ; 退格删除
     je  backspace
 
+    ; 单行80字符上限判断
     mov bl, [col]
     cmp bl, 79
     je  enter_line
@@ -60,9 +68,7 @@ kernel_main:
     call set_cursor
     jmp kernel_main
 
-;--------------------------
-; 换行 + 输出提示符
-;--------------------------
+;==================== 回车换行逻辑 ====================
 enter_line:
     mov byte [col], 0
     inc byte [row]
@@ -76,9 +82,7 @@ enter_line:
     call set_cursor
     jmp kernel_main
 
-;--------------------------
-; 退格：保护提示符区域
-;--------------------------
+;==================== 退格逻辑（保护$提示符） ====================
 backspace:
     cmp byte [col], 2
     jle kernel_main
@@ -89,16 +93,16 @@ backspace:
     call set_cursor
     jmp kernel_main
 
-;--------------------------
-; 清屏处理
-;--------------------------
+;==================== ESC清屏完整重绘 ====================
 do_clear:
     call clear_screen
     mov di, 0
     mov byte [row], 0
     mov byte [col], 0
+    ; 重绘标题
     mov si, msg_kernel
     call print_str
+    ; 重绘提示符
     mov di, 160
     mov si, prompt
     call print_str
@@ -108,17 +112,13 @@ do_clear:
     call set_cursor
     jmp kernel_main
 
-;--------------------------
-; 按键读取 getkey
-;--------------------------
+;==================== 工具函数：读取键盘按键 ====================
 getkey:
     mov ah, 0x00
     int 0x16
     ret
 
-;--------------------------
-; 单字符输出（用户输入 黄色 0x0E）
-;--------------------------
+;==================== 工具函数：打印单个输入字符（黄色0x0E） ====================
 putc:
     mov [es:di], al
     mov byte [es:di+1], 0x0E
@@ -126,9 +126,7 @@ putc:
     inc byte [col]
     ret
 
-;--------------------------
-; 字符串输出（系统文本 绿色 0x0A）
-;--------------------------
+;==================== 工具函数：打印字符串（系统绿色0x0A） ====================
 print_str:
 print_next:
     lodsb
@@ -142,9 +140,7 @@ print_next:
 .end:
     ret
 
-;--------------------------
-; 清屏函数
-;--------------------------
+;==================== 工具函数：全屏清空 ====================
 clear_screen:
     push di
     mov di, 0
@@ -156,24 +152,20 @@ clear_loop:
     pop di
     ret
 
-;--------------------------
-; 同步硬件光标位置
-;--------------------------
+;==================== 工具函数：同步硬件光标坐标 ====================
 set_cursor:
     mov ah, 0x02
-    mov bh, 0        ; 显示页 0
+    mov bh, 0
     mov dh, [row]
     mov dl, [col]
     int 0x10
     ret
 
-; ==============================
-; 【全部数据移至代码末尾，杜绝执行流跑飞】
-; ==============================
+;==================== 全局数据区（全部放在代码末尾，隔离执行流） ====================
 row         db 1
 col         db 2
-msg_kernel  db 'XuanWu Kernel 0.0.13', 0
+msg_kernel  db 'XuanWu Kernel 0.0.14', 0
 prompt      db '$ ', 0
 
-; 死循环拦截执行流，绝对不会向下读取数据
+; 死循环拦截，防止CPU向下读取数据区乱执行
 jmp $
