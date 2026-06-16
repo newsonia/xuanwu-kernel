@@ -3,19 +3,10 @@ bits 16
 
 ; ==============================
 ; XuanWu Kernel 0.0.13
-; Renamed from Pangu Kernel
-; Update Log:
-; 1. Replace Ctrl+C with Esc for clear screen
-; 2. Add boot delay & blinking movable cursor
-; 3. Rename to XuanWu Kernel
-; Original Features:
-; 1. Normal 'c' key can be typed normally
-; 2. Double protection for 80-char line limit
-; 3. Different colors for system text and user input
-; 4. Protect prompt from backspace
+; Fixed: Data all placed at file end, no execution flow overflow
 ; ==============================
 
-; 段设置
+; 段设置（匹配boot加载地址 0x1000:0000）
 mov ax, 0x1000
 mov ds, ax
 mov ax, 0xB800
@@ -42,10 +33,6 @@ call print_str
 ; 首次换行并显示提示符
 call enter_line
 
-; 光标行列变量
-row db 0
-col db 0
-
 ; 同步初始光标位置
 call set_cursor
 
@@ -55,8 +42,7 @@ call set_cursor
 kernel_main:
     call getkey        ; 读取按键
 
-    ; ========== 改为 Esc 清屏 ==========
-    ; al=0x1B 代表 Esc
+    ; ESC 清屏 al=0x1B
     cmp al, 0x1B
     je  do_clear
 
@@ -99,8 +85,7 @@ backspace:
 
     dec byte [col]
     sub di, 2
-    mov byte [es:di], 0
-    mov byte [es:di+1], 0x00
+    mov word [es:di], 0
     call set_cursor
     jmp kernel_main
 
@@ -112,8 +97,14 @@ do_clear:
     mov di, 0
     mov byte [row], 0
     mov byte [col], 0
+    mov si, msg_kernel
+    call print_str
+    mov di, 160
     mov si, prompt
     call print_str
+    mov byte [row], 1
+    mov byte [col], 2
+    mov di, 164
     call set_cursor
     jmp kernel_main
 
@@ -126,7 +117,7 @@ getkey:
     ret
 
 ;--------------------------
-; 单字符输出（用户输入 黄色）
+; 单字符输出（用户输入 黄色 0x0E）
 ;--------------------------
 putc:
     mov [es:di], al
@@ -136,9 +127,10 @@ putc:
     ret
 
 ;--------------------------
-; 字符串输出（系统文本 绿色）
+; 字符串输出（系统文本 绿色 0x0A）
 ;--------------------------
 print_str:
+print_next:
     lodsb
     test al, al
     je  .end
@@ -146,7 +138,7 @@ print_str:
     mov byte [es:di+1], 0x0A
     add di, 2
     inc byte [col]
-    jmp print_str
+    jmp print_next
 .end:
     ret
 
@@ -157,8 +149,7 @@ clear_screen:
     push di
     mov di, 0
 clear_loop:
-    mov byte [es:di], 0
-    mov byte [es:di+1], 0x00
+    mov word [es:di], 0
     add di, 2
     cmp di, 80*25*2
     jb clear_loop
@@ -176,8 +167,13 @@ set_cursor:
     int 0x10
     ret
 
-;--------------------------
-; 字符串数据（已更名 XuanWu）
-;--------------------------
-msg_kernel db 'XuanWu Kernel 0.0.13', 0
-prompt     db '$ ', 0
+; ==============================
+; 【全部数据移至代码末尾，杜绝执行流跑飞】
+; ==============================
+row         db 1
+col         db 2
+msg_kernel  db 'XuanWu Kernel 0.0.13', 0
+prompt      db '$ ', 0
+
+; 死循环拦截执行流，绝对不会向下读取数据
+jmp $
