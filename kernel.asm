@@ -2,7 +2,7 @@ org 0x0000
 bits 16
 
 ; ==============================
-; XuanWu Kernel 0.0.15 Step2
+; XuanWu Kernel 0.0.15 Step2 Base Kernel
 ; Update Log:
 ; 1. Replace Ctrl+C with Esc for clear screen
 ; 2. Add boot delay & blinking movable cursor
@@ -12,7 +12,7 @@ bits 16
 ; 6. Optimize VGA write to eliminate character residual shadow
 ; 7. Fix special key lost: swap judge order
 ; 8. v0.0.15 Step1: Add 64-byte input buffer
-; 9. v0.0.15 Step2: Add str_cmp string compare function
+; 9. v0.0.15 Step2: str_cmp moved to independent command.asm
 ; ==============================
 
 ; 段寄存器配置（boot将内核加载至 0x1000:0000）
@@ -189,27 +189,6 @@ set_cursor:
     mov dl, [col]
     int 0x10
     ret
-
-;==================== 【新增Step2】工具：字符串对比 str_cmp ====================
-; 入参：si = 字符串1，di = 字符串2
-; 返回：al = 1 两字符串完全一致；al = 0 不相同
-str_cmp:
-.cmp_loop:
-mov al, [si]
-mov bl, [di]
-cmp al, bl
-jne .not_equal
-test al, al
-jz .equal_end
-inc si
-inc di
-jmp .cmp_loop
-.not_equal:
-mov al, 0
-ret
-.equal_end:
-mov al, 1
-ret
 
 ;==================== 全局数据区 ====================
 row         db 1
