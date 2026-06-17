@@ -10,6 +10,7 @@ bits 16
 ; 4. Fix bug: ESC clear screen reprint kernel title
 ; 5. Move all data to file end, add jmp $ to block execution overflow
 ; 6. Optimize VGA write to eliminate character residual shadow
+; 7. Fix special key lost: swap judge order
 ; Original Features:
 ; 1. Normal 'c' key input
 ; 2. 80-column auto line wrap protection
@@ -22,6 +23,16 @@ mov ax, 0x1000
 mov ds, ax
 mov ax, 0xB800
 mov es, ax
+
+; ============ 清空开机键盘缓冲区，吸干残留垃圾按键 ============
+flush_kb:
+mov ah, 0x01
+int 0x16
+jz kb_end
+mov ah, 0x00
+int 0x16
+jmp flush_kb
+kb_end:
 
 ; 开机1秒延时
 mov cx, 0x000F
@@ -48,16 +59,23 @@ call enter_line
 ; 同步硬件光标
 call set_cursor
 
-;==================== 主输入循环 ====================
+;==================== 主输入循环（修正判断顺序） ====================
 kernel_main:
     call getkey
 
+    ; 第一步：优先处理特殊控制键（ESC/回车/退格），不进过滤
     cmp al, 0x1B    ; ESC 全局清屏
     je  do_clear
     cmp al, 0x0D    ; 回车换行
     je  enter_line
     cmp al, 0x08    ; 退格删除
     je  backspace
+
+    ; 第二步：只放行普通可见文字 0x20 ~ 0x7E
+    cmp al, 0x20
+    jb kernel_main
+    cmp al, 0x7E
+    ja kernel_main
 
     ; 单行80字符上限判断
     mov bl, [col]
