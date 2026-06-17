@@ -2,7 +2,7 @@ org 0x0000
 bits 16
 
 ; ==============================
-; XuanWu Kernel 0.0.14
+; XuanWu Kernel 0.0.15 Step1
 ; Update Log:
 ; 1. Replace Ctrl+C with Esc for clear screen
 ; 2. Add boot delay & blinking movable cursor
@@ -11,11 +11,7 @@ bits 16
 ; 5. Move all data to file end, add jmp $ to block execution overflow
 ; 6. Optimize VGA write to eliminate character residual shadow
 ; 7. Fix special key lost: swap judge order
-; Original Features:
-; 1. Normal 'c' key input
-; 2. 80-column auto line wrap protection
-; 3. Two-color text: system green / user input yellow
-; 4. Backspace cannot delete prompt "$ "
+; 8. v0.0.15 Add: 64-byte input buffer
 ; ==============================
 
 ; 段寄存器配置（boot将内核加载至 0x1000:0000）
@@ -40,7 +36,7 @@ mov dx, 0x4240
 mov ah, 0x86
 int 0x15
 
-; 光标：下划线闪烁样式
+; 光标配置（暂时保留原参数，不改动）
 mov ah, 0x01
 mov ch, 0x06
 mov cl, 0x07
@@ -59,11 +55,11 @@ call enter_line
 ; 同步硬件光标
 call set_cursor
 
-;==================== 主输入循环（修正判断顺序） ====================
+;==================== 主输入循环 ====================
 kernel_main:
     call getkey
 
-    ; 第一步：优先处理特殊控制键（ESC/回车/退格），不进过滤
+    ; 优先处理特殊控制键
     cmp al, 0x1B    ; ESC 全局清屏
     je  do_clear
     cmp al, 0x0D    ; 回车换行
@@ -71,7 +67,7 @@ kernel_main:
     cmp al, 0x08    ; 退格删除
     je  backspace
 
-    ; 第二步：只放行普通可见文字 0x20 ~ 0x7E
+    ; 过滤普通控制字符
     cmp al, 0x20
     jb kernel_main
     cmp al, 0x7E
@@ -82,12 +78,24 @@ kernel_main:
     cmp bl, 79
     je  enter_line
 
+    ; ========== 新增：写入输入缓冲区 ==========
+    mov bl, [buf_ptr]
+    cmp bl, 63
+    je skip_buf_write
+    mov bh, 0
+    lea si, [input_buf]
+    add si, bx
+    mov [si], al
+    inc byte [buf_ptr]
+skip_buf_write:
+
     call putc
     call set_cursor
     jmp kernel_main
 
-;==================== 回车换行逻辑 ====================
+;==================== 回车换行逻辑（新增清空缓冲区） ====================
 enter_line:
+    mov byte [buf_ptr], 0   ; 回车清空缓冲区指针
     mov byte [col], 0
     inc byte [row]
     mov al, [row]
@@ -100,23 +108,25 @@ enter_line:
     call set_cursor
     jmp kernel_main
 
-;==================== 退格逻辑（保护$提示符） ====================
+;==================== 退格逻辑（同步回退缓冲区指针） ====================
 backspace:
     cmp byte [col], 2
     jle kernel_main
 
     dec byte [col]
+    dec byte [buf_ptr]      ; 退格同步清空缓冲区末尾字符
     sub di, 2
     mov word [es:di], 0
     call set_cursor
     jmp kernel_main
 
-;==================== ESC清屏完整重绘 ====================
+;==================== ESC清屏完整重绘（清空缓冲区） ====================
 do_clear:
     call clear_screen
     mov di, 0
     mov byte [row], 0
     mov byte [col], 0
+    mov byte [buf_ptr], 0   ; 清屏同步清空缓冲区
     ; 重绘标题
     mov si, msg_kernel
     call print_str
@@ -179,10 +189,12 @@ set_cursor:
     int 0x10
     ret
 
-;==================== 全局数据区（全部放在代码末尾，隔离执行流） ====================
+;==================== 全局数据区（新增缓冲区变量） ====================
 row         db 1
 col         db 2
-msg_kernel  db 'XuanWu Kernel 0.0.14', 0
+buf_ptr     db 0
+input_buf   times 64 db 0
+msg_kernel  db 'XuanWu Kernel 0.0.15 Step1', 0
 prompt      db '$ ', 0
 
 ; 死循环拦截，防止CPU向下读取数据区乱执行
