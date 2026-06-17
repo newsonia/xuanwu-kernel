@@ -2,7 +2,7 @@ org 0x0000
 bits 16
 
 ; ==============================
-; XuanWu Kernel 0.0.15 Step1
+; XuanWu Kernel 0.0.15 Step2
 ; Update Log:
 ; 1. Replace Ctrl+C with Esc for clear screen
 ; 2. Add boot delay & blinking movable cursor
@@ -11,7 +11,8 @@ bits 16
 ; 5. Move all data to file end, add jmp $ to block execution overflow
 ; 6. Optimize VGA write to eliminate character residual shadow
 ; 7. Fix special key lost: swap judge order
-; 8. v0.0.15 Add: 64-byte input buffer
+; 8. v0.0.15 Step1: Add 64-byte input buffer
+; 9. v0.0.15 Step2: Add str_cmp string compare function
 ; ==============================
 
 ; 段寄存器配置（boot将内核加载至 0x1000:0000）
@@ -36,7 +37,7 @@ mov dx, 0x4240
 mov ah, 0x86
 int 0x15
 
-; 光标配置（暂时保留原参数，不改动）
+; 光标配置
 mov ah, 0x01
 mov ch, 0x06
 mov cl, 0x07
@@ -78,7 +79,7 @@ kernel_main:
     cmp bl, 79
     je  enter_line
 
-    ; ========== 新增：写入输入缓冲区 ==========
+    ; 写入输入缓冲区
     mov bl, [buf_ptr]
     cmp bl, 63
     je skip_buf_write
@@ -93,9 +94,9 @@ skip_buf_write:
     call set_cursor
     jmp kernel_main
 
-;==================== 回车换行逻辑（新增清空缓冲区） ====================
+;==================== 回车换行逻辑（清空缓冲区） ====================
 enter_line:
-    mov byte [buf_ptr], 0   ; 回车清空缓冲区指针
+    mov byte [buf_ptr], 0
     mov byte [col], 0
     inc byte [row]
     mov al, [row]
@@ -114,7 +115,7 @@ backspace:
     jle kernel_main
 
     dec byte [col]
-    dec byte [buf_ptr]      ; 退格同步清空缓冲区末尾字符
+    dec byte [buf_ptr]
     sub di, 2
     mov word [es:di], 0
     call set_cursor
@@ -126,7 +127,7 @@ do_clear:
     mov di, 0
     mov byte [row], 0
     mov byte [col], 0
-    mov byte [buf_ptr], 0   ; 清屏同步清空缓冲区
+    mov byte [buf_ptr], 0
     ; 重绘标题
     mov si, msg_kernel
     call print_str
@@ -189,12 +190,33 @@ set_cursor:
     int 0x10
     ret
 
-;==================== 全局数据区（新增缓冲区变量） ====================
+;==================== 【新增Step2】工具：字符串对比 str_cmp ====================
+; 入参：si = 字符串1，di = 字符串2
+; 返回：al = 1 两字符串完全一致；al = 0 不相同
+str_cmp:
+.cmp_loop:
+mov al, [si]
+mov bl, [di]
+cmp al, bl
+jne .not_equal
+test al, al
+jz .equal_end
+inc si
+inc di
+jmp .cmp_loop
+.not_equal:
+mov al, 0
+ret
+.equal_end:
+mov al, 1
+ret
+
+;==================== 全局数据区 ====================
 row         db 1
 col         db 2
 buf_ptr     db 0
 input_buf   times 64 db 0
-msg_kernel  db 'XuanWu Kernel 0.0.15 Step1', 0
+msg_kernel  db 'XuanWu Kernel 0.0.15 Step2', 0
 prompt      db '$ ', 0
 
 ; 死循环拦截，防止CPU向下读取数据区乱执行
