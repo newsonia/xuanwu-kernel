@@ -212,10 +212,22 @@ ret
 mov al, 1
 ret
 
-;==================== 临时占位：命令解析入口（功能等价原enter_line） ====================
 parse_command:
-    call enter_line
-    jmp kernel_main
+; ========== 第1步：给输入缓冲区末尾写入字符串结束符0 ==========
+; 1. 读取当前缓冲区有效字符数量 buf_ptr
+mov bl, [buf_ptr]
+mov bh, 0
+; 2. 计算缓冲区末尾地址：input_buf起始 + bx偏移
+lea si, [input_buf]
+add si, bx
+; 3. 在末尾写入0，作为C风格字符串结束标记
+mov byte [si], 0
+; 4. 将si重置为缓冲区开头，方便后续str_cmp读取
+mov si, input_buf
+
+; 临时过渡：功能和旧占位一致，直接换行返回，不做命令比对
+call enter_line
+jmp kernel_main
 
 ;==================== 全局数据区 ====================
 row         db 1
