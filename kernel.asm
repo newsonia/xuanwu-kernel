@@ -2,7 +2,7 @@ org 0x0000
 bits 16
 
 ; ==============================
-; XuanWu Kernel 0.0.15 Step2
+; XuanWu Kernel 0.0.15
 ; Update Log:
 ; 1. Replace Ctrl+C with Esc for clear screen
 ; 2. Add boot delay & blinking movable cursor
@@ -198,10 +198,13 @@ str_cmp:
 .cmp_loop:
 mov al, [si]
 mov bl, [di]
+; 字符不一样，直接返回0不匹配
 cmp al, bl
 jne .not_equal
+; 两个都是0，完全匹配返回1
 test al, al
 jz .equal_end
+; 字符相同且非结束符，继续下一字节
 inc si
 inc di
 jmp .cmp_loop
@@ -213,19 +216,52 @@ mov al, 1
 ret
 
 parse_command:
-; ========== 第1步：给输入缓冲区末尾写入字符串结束符0 ==========
-; 1. 读取当前缓冲区有效字符数量 buf_ptr
+; 第1步：安全补0，防止越界覆盖变量
 mov bl, [buf_ptr]
+cmp bl, 63
+jb safe_zero
+mov bl, 63
+safe_zero:
 mov bh, 0
-; 2. 计算缓冲区末尾地址：input_buf起始 + bx偏移
 lea si, [input_buf]
 add si, bx
-; 3. 在末尾写入0，作为C风格字符串结束标记
 mov byte [si], 0
-; 4. 将si重置为缓冲区开头，方便后续str_cmp读取
 mov si, input_buf
 
-; 临时过渡：功能和旧占位一致，直接换行返回，不做命令比对
+; 第2步：比对ver命令
+mov di, cmd_ver
+call str_cmp
+cmp al, 1
+je print_ver
+
+; 第2步：比对help命令
+;mov di, cmd_help
+;call str_cmp
+;cmp al, 1
+;je print_help
+
+; 不匹配直接换行
+jmp cmd_end
+
+print_ver:
+mov al, [row]
+mov bl, 160
+mul bl
+mov di, ax
+mov si, ver_text
+call print_str
+jmp cmd_end
+
+;print_help:
+;mov al, [row]
+;mov bl, 160
+;mul bl
+;mov di, ax
+;mov si, help_text
+;call print_str
+;jmp cmd_end
+
+cmd_end:
 call enter_line
 jmp kernel_main
 
@@ -234,8 +270,12 @@ row         db 1
 col         db 2
 buf_ptr     db 0
 input_buf   times 64 db 0
-msg_kernel  db 'XuanWu Kernel 0.0.15 Step2', 0
+msg_kernel  db 'XuanWu Kernel 0.0.15 ', 0
 prompt      db '$ ', 0
+cmd_ver     db 'ver', 0
+ver_text    db '0.0.15', 0
+;cmd_help     db 'help', 0
+;help_text    db 'help command', 0
 
 ; 死循环拦截，防止CPU向下读取数据区乱执行
 jmp $
