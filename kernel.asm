@@ -13,6 +13,7 @@ bits 16
 ; 7. Fix special key lost: swap judge order
 ; 8. v0.0.15 Step1: Add 64-byte input buffer
 ; 9. v0.0.15 Step2: Add str_cmp string compare function
+; 10.Temp: Change enter key jump to parse_command, add empty placeholder
 ; ==============================
 
 ; 段寄存器配置（boot将内核加载至 0x1000:0000）
@@ -63,8 +64,8 @@ kernel_main:
     ; 优先处理特殊控制键
     cmp al, 0x1B    ; ESC 全局清屏
     je  do_clear
-    cmp al, 0x0D    ; 回车换行
-    je  enter_line
+    cmp al, 0x0D    ; 回车跳转至命令解析占位函数
+    je  parse_command
     cmp al, 0x08    ; 退格删除
     je  backspace
 
@@ -210,6 +211,11 @@ ret
 .equal_end:
 mov al, 1
 ret
+
+;==================== 临时占位：命令解析入口（功能等价原enter_line） ====================
+parse_command:
+    call enter_line
+    jmp kernel_main
 
 ;==================== 全局数据区 ====================
 row         db 1
